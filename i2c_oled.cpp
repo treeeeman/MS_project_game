@@ -1,7 +1,5 @@
 #include "i2c_oled.h"
-#include "font.h"
 #include "mbed.h"
-#include "genshin.h"
 #include <cstdint>
 
 DigitalOut OLED_SCL(D9);
@@ -90,11 +88,6 @@ void OLED_WriteData(uint8_t Data) {
   OLED_I2C_Stop();
 }
 
-void OLED_Genshin() {
-  OLED_ClearBuffer();
-  OLED_ShowPictureBuffered(0, 0, 128, 64, genshinImage, 0);
-  OLED_SendBuffer();
-}
 
 //清除显存
 void OLED_ClearBuffer(void) {
@@ -136,89 +129,6 @@ void OLED_DrawPointBuffered(uint8_t x, uint8_t y, uint8_t t) {
   }
 }
 
-//在指定位置显示一个字符,包括部分字符
-// x:0~127
-// y:0~63
-// size1:选择字体 6x8/6x12/8x16/12x24
-// mode:0,反色显示;1,正常显示
-void OLED_ShowCharBuffered(uint8_t x, uint8_t y, uint8_t chr, uint8_t size1,
-                           uint8_t mode) {
-  uint8_t i, m, temp, size2, chr1;
-  uint8_t x0 = x, y0 = y;
-  if (size1 == 8)
-    size2 = 6;
-  else
-    size2 = (size1 / 8 + ((size1 % 8) ? 1 : 0)) *
-            (size1 / 2); //得到字体一个字符对应点阵集所占的字节数
-  chr1 = chr - ' ';      //计算偏移后的值
-  for (i = 0; i < size2; i++) {
-    if (size1 == 8) { //调用0806字体
-      temp = asc2_0806[chr1][i];
-    } else if (size1 == 12) { //调用1206字体
-      temp = asc2_1206[chr1][i];
-    } else if (size1 == 16) { //调用1608字体
-      temp = asc2_1608[chr1][i];
-    } else if (size1 == 24) { //调用2412字体
-      temp = asc2_2412[chr1][i];
-    } else
-      return;
-    for (m = 0; m < 8; m++) {
-      if (temp & 0x01)
-        OLED_DrawPointBuffered(x, y, mode);
-      else
-        OLED_DrawPointBuffered(x, y, !mode);
-      temp >>= 1;
-      y++;
-    }
-    x++;
-    if ((size1 != 8) && ((x - x0) == size1 / 2)) {
-      x = x0;
-      y0 = y0 + 8;
-    }
-    y = y0;
-  }
-}
-
-//显示字符串
-// x,y:起点坐标
-// size1:字体大小
-//*chr:字符串起始地址
-// mode:0,反色显示;1,正常显示
-void OLED_ShowStringBuffered(uint8_t x, uint8_t y, char string[], uint8_t size1,
-                             uint8_t mode) {
-  uint8_t i=0;
-  while ((string[i] >= ' ') && (string[i] <= '~')) //判断是不是非法字符!
-  {
-    OLED_ShowCharBuffered(x, y, string[i], size1, mode);
-    if (size1 == 8)
-      x += 6;
-    else
-      x += size1 / 2;
-    i++;
-  }
-}
-
-//显示数字
-// x,y :起点坐标
-// num :要显示的数字
-// len :数字的位数
-// size:字体大小
-// mode:0,反色显示;1,正常显示
-void OLED_ShowNumBuffered(uint8_t x, uint8_t y, uint32_t num, uint8_t len,
-                          uint8_t size1, uint8_t mode) {
-  uint8_t t, temp, m = 0;
-  if (size1 == 8)
-    m = 2;
-  for (t = 0; t < len; t++) {
-    temp = (num / OLED_Pow(10, len - t - 1)) % 10;
-    if (temp == 0) {
-      OLED_ShowCharBuffered(x + (size1 / 2 + m) * t, y, '0', size1, mode);
-    } else {
-      OLED_ShowCharBuffered(x + (size1 / 2 + m) * t, y, temp + '0', size1,
-                            mode);
-    }
-  }
-}
 
 //画线
 // x1,y1:起点坐标
@@ -263,64 +173,6 @@ void OLED_DrawLineBuffered(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2,
     if (yerr > distance) {
       yerr -= distance;
       uCol += incy;
-    }
-  }
-}
-
-// x,y:圆心坐标
-// r:圆的半径
-void OLED_DrawCircleBuffered(uint8_t x, uint8_t y, uint8_t r) {
-  int a, b, num;
-  a = 0;
-  b = r;
-  while (2 * b * b >= r * r) {
-    OLED_DrawPointBuffered(x + a, y - b, 1);
-    OLED_DrawPointBuffered(x - a, y - b, 1);
-    OLED_DrawPointBuffered(x - a, y + b, 1);
-    OLED_DrawPointBuffered(x + a, y + b, 1);
-
-    OLED_DrawPointBuffered(x + b, y + a, 1);
-    OLED_DrawPointBuffered(x + b, y - a, 1);
-    OLED_DrawPointBuffered(x - b, y - a, 1);
-    OLED_DrawPointBuffered(x - b, y + a, 1);
-
-    a++;
-    num = (a * a + b * b) - r * r; //计算画的点离圆心的距离
-    if (num > 0) {
-      b--;
-      a--;
-    }
-  }
-}
-
-// x,y：起点坐标
-// sizex,sizey,图片长宽
-// BMP[]：要写入的图片数组
-// mode:0,反色显示;1,正常显示
-void OLED_ShowPictureBuffered(uint8_t x, uint8_t y, uint8_t sizex,
-                              uint8_t sizey, uint8_t BMP[], uint8_t mode) {
-  uint16_t j = 0;
-  uint8_t i, n, temp, m;
-  uint8_t x0 = x, y0 = y;
-  sizey = sizey / 8 + ((sizey % 8) ? 1 : 0);
-  for (n = 0; n < sizey; n++) {
-    for (i = 0; i < sizex; i++) {
-      temp = BMP[j];
-      j++;
-      for (m = 0; m < 8; m++) {
-        if (temp & 0x01)
-          OLED_DrawPointBuffered(x, y, mode);
-        else
-          OLED_DrawPointBuffered(x, y, !mode);
-        temp >>= 1;
-        y++;
-      }
-      x++;
-      if ((x - x0) == sizex) {
-        x = x0;
-        y0 = y0 + 8;
-      }
-      y = y0;
     }
   }
 }
