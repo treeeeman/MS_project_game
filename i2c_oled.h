@@ -1,16 +1,7 @@
 #include <cstdint>
 #include "mbed.h"
+
 void OLED_Init(void);
-
-// Display Genshin Impact logo
-//
-// Download Genshin Impact NOW!
-// Available on PC, Android, iOS, PlayStation 4 & PlayStation 5
-//
-// CN:            https://ys.mihoyo.com/
-// International: https://genshin.hoyoverse.com/
-void OLED_Genshin(void);
-
 void OLED_ClearBuffer(void);
 void OLED_SendBuffer(void);
 void OLED_DrawPointBuffered(uint8_t x,uint8_t y,uint8_t t);
